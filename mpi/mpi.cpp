@@ -24,6 +24,7 @@ struct ReduceData
   int updated;
 };
 
+// 生成随机图，使用邻接表存储
 void generateRandomGraph(int V, int E, std::vector<int> &vertex_offsets, std::vector<Edge> &edges)
 {
   std::vector<std::vector<Edge>> adj(V);
@@ -32,6 +33,7 @@ void generateRandomGraph(int V, int E, std::vector<int> &vertex_offsets, std::ve
   std::uniform_int_distribution<> node_dist(0, V - 1);
   std::uniform_real_distribution<float> weight_dist(1.0f, 20.0f);
 
+  // 每个顶点至少连接一个边，防止孤立
   for (int u = 0; u < V; ++u)
   {
     int v = node_dist(gen);
@@ -40,6 +42,7 @@ void generateRandomGraph(int V, int E, std::vector<int> &vertex_offsets, std::ve
     adj[u].push_back({v, weight_dist(gen)});
   }
 
+  // 随机添加剩余的边
   int edges_added = V;
   while (edges_added < E)
   {
@@ -62,6 +65,7 @@ void generateRandomGraph(int V, int E, std::vector<int> &vertex_offsets, std::ve
     edges_added++;
   }
 
+  // 构建CSR格式的边界信息
   vertex_offsets.resize(V + 1);
   vertex_offsets[0] = 0;
   for (int i = 0; i < V; ++i)
@@ -72,6 +76,7 @@ void generateRandomGraph(int V, int E, std::vector<int> &vertex_offsets, std::ve
     edges.insert(edges.end(), list.begin(), list.end());
 }
 
+// 串行Bellman-Ford算法（未使用）
 void serialBellmanFord(int V, int source, const std::vector<int> &vertex_offsets,
                        const std::vector<Edge> &edges, std::vector<float> &dist)
 {
@@ -88,7 +93,7 @@ void serialBellmanFord(int V, int source, const std::vector<int> &vertex_offsets
     has_change = false;
     std::fill(new_updated.begin(), new_updated.end(), 0);
 
-    // 遍历所有被标记需要更新的顶点
+    // 遍历所有需要更新的顶点
     for (int u = 0; u < V; ++u)
     {
       if (!updated[u])
@@ -113,7 +118,7 @@ void serialBellmanFord(int V, int source, const std::vector<int> &vertex_offsets
   }
 }
 
-// CPU单线程Dijkstra
+// 串行 Dijkstra 算法
 void cpuDijkstra(int V, int source, const std::vector<int> &vertex_offsets,
                  const std::vector<Edge> &edges, std::vector<float> &dist, std::vector<int> &prev)
 {
@@ -149,6 +154,7 @@ void cpuDijkstra(int V, int source, const std::vector<int> &vertex_offsets,
   }
 }
 
+// 自定义规约函数
 void my_reduce_op(void *invec, void *inoutvec, int *len, MPI_Datatype *dtype)
 {
   ReduceData *in = (ReduceData *)invec;
@@ -174,7 +180,7 @@ int main(int argc, char *argv[])
   {
     if (world_rank == 0)
     {
-      fprintf(stderr, "Usage: %s <V> <E>\n", argv[0]);
+      fprintf(stderr, "用法: %s <点数V> <边数E>\n", argv[0]);
     }
     MPI_Finalize();
     return EXIT_FAILURE;
@@ -186,7 +192,7 @@ int main(int argc, char *argv[])
 
   if (V <= 0 || E <= 0)
   {
-    printf("Invalid block size or number of threads.\n");
+    printf("点数或边数无效。\n");
     return 1;
   }
 
@@ -197,14 +203,14 @@ int main(int argc, char *argv[])
     generateRandomGraph(V, E, vertex_offsets, edges);
   }
 
-  // Broadcast graph data
+  // 广播图数据
   vertex_offsets.resize(V + 1);
   edges.resize(E);
 
   MPI_Bcast(vertex_offsets.data(), V + 1, MPI_INT, ROOT, MPI_COMM_WORLD);
   MPI_Bcast(edges.data(), E * sizeof(Edge), MPI_BYTE, ROOT, MPI_COMM_WORLD);
 
-  // Initialize MPI data types
+  // 定义 MPI 复合类型
   MPI_Datatype reduce_data_type;
   int blocklengths[2] = {1, 1};
   MPI_Datatype types[2] = {MPI_FLOAT, MPI_INT};
@@ -217,7 +223,7 @@ int main(int argc, char *argv[])
   MPI_Op my_op;
   MPI_Op_create(my_reduce_op, 1, &my_op);
 
-  // Initialize variables
+  // 初始化变量
   std::vector<float> dist(V, INF);
   std::vector<int> updated(V, 0);
 
@@ -225,12 +231,12 @@ int main(int argc, char *argv[])
   dist[source] = 0.0f;
   updated[source] = 1;
 
-  const int step = world_size;  // 步长等于进程总数
-  const int start = world_rank; // 起始点等于进程号
+  const int step = world_size;  // 步长为进程数
+  const int start = world_rank; // 起始点为进程编号
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  double comp_time = 0.0, comm_time = 0.0; // 新增计时变量
+  double comp_time = 0.0, comm_time = 0.0; // 记录计算和通信时间
   bool global_change = true;
 
   double start_time = MPI_Wtime();
@@ -244,7 +250,7 @@ int main(int argc, char *argv[])
       local_reduce[i].updated = 0;
     }
 
-    // 处理循环分配的顶点
+    // 循环分配处理顶点
     double start_comp = MPI_Wtime();
     int processed = 0;
     for (int u = start; u < V; u += step)
@@ -265,16 +271,14 @@ int main(int argc, char *argv[])
       }
     }
     comp_time += MPI_Wtime() - start_comp;
-    // 调试输出：显示各进程处理顶点数
-    // printf("Rank %d processed %d vertices\n", world_rank, processed);
 
-    // Global reduction
+    // 全局归约
     double start_comm = MPI_Wtime();
     std::vector<ReduceData> global_reduce(V);
     MPI_Allreduce(local_reduce.data(), global_reduce.data(), V, reduce_data_type, my_op, MPI_COMM_WORLD);
     comm_time += MPI_Wtime() - start_comm;
 
-    // Update distances and flags
+    // 更新距离和更新标志
     start_comp = MPI_Wtime();
     std::vector<int> new_updated(V, 0);
     for (int i = 0; i < V; ++i)
@@ -287,7 +291,8 @@ int main(int argc, char *argv[])
       }
     }
     comp_time += MPI_Wtime() - start_comp;
-    // Check global change
+
+    // 检查全局是否还有更新
     int gc_flag = global_change ? 1 : 0;
     start_comm = MPI_Wtime();
     MPI_Allreduce(MPI_IN_PLACE, &gc_flag, 1, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
@@ -304,7 +309,7 @@ int main(int argc, char *argv[])
   MPI_Reduce(&comm_time, &max_comm, 1, MPI_DOUBLE, MPI_MAX, ROOT, MPI_COMM_WORLD);
   if (world_rank == ROOT)
   {
-    // Verification and output results
+    // 串行验证与结果输出
     std::vector<float> serial_dist;
     std::vector<int> cpu_prev;
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -326,7 +331,7 @@ int main(int argc, char *argv[])
     printf("\n[性能分析]\n");
     printf("进程数: %d\n", world_size);
     printf("点数：%d, 边数：%d\n", V, E);
-    printf("正确性: %s\n", correct ? "Yes" : "No");
+    printf("正确性: %s\n", correct ? "是" : "否");
     printf("串行时间: %.4fs\n", serial_time);
     printf("并行时间: % .4fs\n", end_time - start_time);
     printf("加速比: %.2fx\n", serial_time / (end_time - start_time));
@@ -343,6 +348,3 @@ int main(int argc, char *argv[])
   MPI_Finalize();
   return 0;
 }
-
-// Compile with: mpic++ -std=c++14 mpi.cpp -o mpi -fopenmp
-// Run with: mpirun -np 4 ./mpi
