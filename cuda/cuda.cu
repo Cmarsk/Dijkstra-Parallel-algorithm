@@ -4,10 +4,6 @@
 #include <chrono>
 #include <random>
 #include <cuda_runtime.h>
-#include <omp.h>
-#include <limits>
-#include <mutex>
-#include <atomic>
 
 #define INF 1e20f
 
