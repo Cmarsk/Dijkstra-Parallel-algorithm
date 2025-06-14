@@ -1,4 +1,4 @@
-# CUDA + OpenMP 并行 Dijkstra 算法项目
+# CUDA 并行 Dijkstra 算法项目
 
 本项目实现了一个结合 **CUDA** 的并行 Dijkstra 最短路径算法，用于对大规模稀疏图进行最短路径计算。
 
