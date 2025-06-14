@@ -19,7 +19,7 @@
 g++ -O3 -fopenmp -std=c++17 -o tag openmp.c
 ```
 
-### 或使用 Makefile：
+### 使用 Makefile：
 
 ```bash
 make
