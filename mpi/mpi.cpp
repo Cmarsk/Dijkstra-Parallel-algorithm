@@ -184,6 +184,12 @@ int main(int argc, char *argv[])
   int V = atoi(argv[1]);
   int E = atoi(argv[2]);
 
+  if (V <= 0 || E <= 0)
+  {
+    printf("Invalid block size or number of threads.\n");
+    return 1;
+  }
+
   std::vector<int> vertex_offsets;
   std::vector<Edge> edges;
   if (world_rank == ROOT)
